@@ -4,21 +4,20 @@
 #include <unistd.h>
 #include <stdlib.h>
 
-#define ALIGN4(s)         (((((s) - 1) >> 2) << 2) + 4)
-#define BLOCK_DATA(b)      ((b) + 1)
-#define BLOCK_HEADER(ptr)   ((struct block *)(ptr) - 1)
-
+#define ALIGN4(s) (((((s)-1) >> 2) << 2) + 4)
+#define BLOCK_DATA(b) ((b) + 1)
+#define BLOCK_HEADER(ptr) ((struct block *)(ptr)-1)
 
 static int atexit_registered = 0;
-static int num_mallocs       = 0;
-static int num_frees         = 0;
-static int num_reuses        = 0;
-static int num_grows         = 0;
-static int num_splits        = 0;
-static int num_coalesces     = 0;
-static int num_blocks        = 0;
-static int num_requested     = 0;
-static int max_heap          = 0;
+static int num_mallocs = 0;
+static int num_frees = 0;
+static int num_reuses = 0;
+static int num_grows = 0;
+static int num_splits = 0;
+static int num_coalesces = 0;
+static int num_blocks = 0;
+static int num_requested = 0;
+static int max_heap = 0;
 
 /*
  *  \brief printStatistics
@@ -30,29 +29,29 @@ static int max_heap          = 0;
  *
  *  \return none
  */
-void printStatistics( void )
+void printStatistics(void)
 {
-  printf("\nheap management statistics\n");
-  printf("mallocs:\t%d\n", num_mallocs );
-  printf("frees:\t\t%d\n", num_frees );
-  printf("reuses:\t\t%d\n", num_reuses );
-  printf("grows:\t\t%d\n", num_grows );
-  printf("splits:\t\t%d\n", num_splits );
-  printf("coalesces:\t%d\n", num_coalesces );
-  printf("blocks:\t\t%d\n", num_blocks );
-  printf("requested:\t%d\n", num_requested );
-  printf("max heap:\t%d\n", max_heap );
+   printf("\nheap management statistics\n");
+   printf("mallocs:\t%d\n", num_mallocs);
+   printf("frees:\t\t%d\n", num_frees);
+   printf("reuses:\t\t%d\n", num_reuses);
+   printf("grows:\t\t%d\n", num_grows);
+   printf("splits:\t\t%d\n", num_splits);
+   printf("coalesces:\t%d\n", num_coalesces);
+   printf("blocks:\t\t%d\n", num_blocks);
+   printf("requested:\t%d\n", num_requested);
+   printf("max heap:\t%d\n", max_heap);
 }
 
-struct block 
+struct block
 {
-   size_t      size;  /* Size of the allocated block of memory in bytes */
-   struct block *next;  /* Pointer to the next block of allcated memory   */
-   bool        free;  /* Is this block free?                     */
+   size_t size;        /* Size of the allocated block of memory in bytes */
+   struct block *next; /* Pointer to the next block of allcated memory   */
+   bool free;          /* Is this block free?                     */
 };
 
-
 struct block *FreeList = NULL; /* Free list to track the blocks available */
+struct block *Final = NULL;
 
 /*
  * \brief findFreeBlock
@@ -66,29 +65,69 @@ struct block *FreeList = NULL; /* Free list to track the blocks available */
  * \TODO Implement Best Fit
  * \TODO Implement Worst Fit
  */
-struct block *findFreeBlock(struct block **last, size_t size) 
+struct block *findFreeBlock(struct block **last, size_t size)
 {
    struct block *curr = FreeList;
 
 #if defined FIT && FIT == 0
    /* First fit */
-   while (curr && !(curr->free && curr->size >= size)) 
+   while (curr && !(curr->free && curr->size >= size))
    {
       *last = curr;
-      curr  = curr->next;
+      curr = curr->next;
    }
 #endif
 
 #if defined BEST && BEST == 0
    printf("TODO: Implement best fit here\n");
+   struct block *best = NULL;
+   size_t min = 4096;
+
+   while (curr)
+   {
+      if (abs(curr->size - size) < min)
+      {
+         min = curr->size;
+         best = curr;
+      }
+      *last = curr;
+      curr = curr->next;
+   }
+
+   curr = best;
+
 #endif
 
 #if defined WORST && WORST == 0
    printf("TODO: Implement worst fit here\n");
+   struct block *worst = NULL;
+   size_t max = 0;
+
+   while (curr)
+   {
+      if (abs(curr->size - size) > max)
+      {
+         max = curr->size;
+         worst = curr;
+      }
+      *last = curr;
+      curr = curr->next;
+   }
+
+   curr = worst;
+
 #endif
 
 #if defined NEXT && NEXT == 0
    printf("TODO: Implement next fit here\n");
+
+   curr = Final;
+   while (curr && !(curr->free && curr->size >= size))
+   {
+      *last = curr;
+      curr = curr->next;
+   }
+
 #endif
 
    return curr;
@@ -106,7 +145,7 @@ struct block *findFreeBlock(struct block **last, size_t size)
  *
  * \return returns the newly allocated block of NULL if failed
  */
-struct block *growHeap(struct block *last, size_t size) 
+struct block *growHeap(struct block *last, size_t size)
 {
    /* Request more space from OS */
    struct block *curr = (struct block *)sbrk(0);
@@ -115,19 +154,19 @@ struct block *growHeap(struct block *last, size_t size)
    assert(curr == prev);
 
    /* OS allocation failed */
-   if (curr == (struct block *)-1) 
+   if (curr == (struct block *)-1)
    {
       return NULL;
    }
 
    /* Update FreeList if not set */
-   if (FreeList == NULL) 
+   if (FreeList == NULL)
    {
       FreeList = curr;
    }
 
    /* Attach new block to prev block */
-   if (last) 
+   if (last)
    {
       last->next = curr;
    }
@@ -151,20 +190,20 @@ struct block *growHeap(struct block *last, size_t size)
  * \return returns the requested memory allocation to the calling process 
  * or NULL if failed
  */
-void *malloc(size_t size) 
+void *malloc(size_t size)
 {
 
-   if( atexit_registered == 0 )
+   if (atexit_registered == 0)
    {
       atexit_registered = 1;
-      atexit( printStatistics );
+      atexit(printStatistics);
    }
 
    /* Align to multiple of 4 */
    size = ALIGN4(size);
 
    /* Handle 0 size */
-   if (size == 0) 
+   if (size == 0)
    {
       return NULL;
    }
@@ -176,17 +215,17 @@ void *malloc(size_t size)
    /* TODO: Split free block if possible */
 
    /* Could not find free block, so grow heap */
-   if (next == NULL) 
+   if (next == NULL)
    {
       next = growHeap(last, size);
    }
 
    /* Could not find free block or grow heap, so just return NULL */
-   if (next == NULL) 
+   if (next == NULL)
    {
       return NULL;
    }
-   
+
    /* Mark block as in use */
    next->free = false;
 
@@ -204,9 +243,9 @@ void *malloc(size_t size)
  *
  * \return none
  */
-void free(void *ptr) 
+void free(void *ptr)
 {
-   if (ptr == NULL) 
+   if (ptr == NULL)
    {
       return;
    }
