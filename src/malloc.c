@@ -138,6 +138,7 @@ struct block *findFreeBlock(struct block **last, size_t size)
       *last = curr;
       curr = curr->next;
    }
+   Final = curr;
 
 #endif
 
@@ -239,6 +240,7 @@ void *malloc(size_t size)
 
    /* Mark block as in use */
    next->free = false;
+   num_mallocs++;
 
    /* Return data address associated with block */
    return BLOCK_DATA(next);
@@ -266,6 +268,7 @@ void free(void *ptr)
    struct block *tempBlock = FreeList;
    assert(curr->free == 0);
    curr->free = true;
+   num_frees++;
 
    /* TODO: Coalesce free blocks if needed */
    if(curr->next)//if curr->next does not point to nothing
