@@ -85,7 +85,18 @@ struct block *findFreeBlock(struct block **last, size_t size)
 
    while (curr)
    {
-      if (abs(curr->size - size) < min)
+      if(curr->free && (curr->size >= size) && (best == NULL || curr->size < best->size))
+      {
+         best = curr;
+         if(best->size == size)
+         {
+           break;
+         }
+      }
+    curr = curr->next;
+   }
+   
+    /*if(abs(curr->size - size) < min)
       {
          min = curr->size;
          best = curr;
@@ -95,7 +106,7 @@ struct block *findFreeBlock(struct block **last, size_t size)
    }
 
    curr = best;
-
+*/
 #endif
 
 #if defined WORST && WORST == 0
@@ -252,10 +263,45 @@ void free(void *ptr)
 
    /* Make block as free */
    struct block *curr = BLOCK_HEADER(ptr);
+   struct block *tempBlock = FreeList;
    assert(curr->free == 0);
    curr->free = true;
 
    /* TODO: Coalesce free blocks if needed */
+   if(curr->next)//if curr->next does not point to nothing
+   {
+     struct block* rightBlock = curr->next;
+     if(rightBlock->free == true)
+     {
+       curr->size += rightBlock->size;//Add the size of the rightBlock to the current block
+       num_coalesces++; //Increase the number of times we've coalesced now
+       if(!rightBlock->next)//if rightBlock->next points to nothing
+       {
+         curr->next = NULL;//Remove the next block.
+       }
+       else
+         curr->next = rightBlock->next;
+     }
+   }
+   while(tempBlock)//while tempBlock is not empty, we are not at the end of the list / the list is populated.
+   {
+        if(tempBlock->next == curr && tempBlock->free)//If the next one is the current node and the temporary left block from curr is free.
+        {
+          num_coalesces++; //Increase the number of times we've coalesced now
+          struct block* previous = tempBlock;
+          previous->size += curr->size;
+          if(curr->next == NULL)
+          {
+             previous->next == NULL;
+          }
+          else
+          {
+             previous->next = curr->next;
+          }
+        }
+       tempBlock = tempBlock->next;
+   } 
 }
 
 /* vim: set expandtab sts=3 sw=3 ts=6 ft=cpp: --------------------------------*/
+
