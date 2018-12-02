@@ -69,6 +69,7 @@ struct block *Final = NULL;
 struct block *findFreeBlock(struct block **last, size_t size)
 {
    struct block *curr = FreeList;
+
    num_blocks = 0;
 
 #if defined FIT && FIT == 0
@@ -82,11 +83,11 @@ struct block *findFreeBlock(struct block **last, size_t size)
 #endif
 
 #if defined BEST && BEST == 0
-   printf("TODO: Implement best fit here\n");
    struct block *best = NULL;
 
    while (curr)
    {
+      num_blocks++;
       if (curr->free && (curr->size >= size) && (best == NULL || curr->size < best->size))
       {
          best = curr;
@@ -103,12 +104,12 @@ struct block *findFreeBlock(struct block **last, size_t size)
 #endif
 
 #if defined WORST && WORST == 0
-   printf("TODO: Implement worst fit here\n");
    struct block *worst = NULL;
    size_t max = 0;
 
    while (curr)
    {
+      num_blocks++;
       if (curr->free && curr->size > size && abs(curr->size - size) > max)
       {
          max = curr->size;
@@ -123,7 +124,6 @@ struct block *findFreeBlock(struct block **last, size_t size)
 #endif
 
 #if defined NEXT && NEXT == 0
-   printf("TODO: Implement next fit here\n");
 
    if (Final == NULL)
    {
@@ -132,6 +132,7 @@ struct block *findFreeBlock(struct block **last, size_t size)
    curr = Final;
    while (curr && !(curr->free && curr->size >= size))
    {
+      num_blocks++;
       *last = curr;
       curr = curr->next;
    }
