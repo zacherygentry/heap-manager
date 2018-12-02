@@ -48,6 +48,7 @@ struct block
    size_t size;        /* Size of the allocated block of memory in bytes */
    struct block *next; /* Pointer to the next block of allcated memory   */
    bool free;          /* Is this block free?                     */
+   bool dirty;         /* Has this block been used before?        */
 };
 
 struct block *FreeList = NULL; /* Free list to track the blocks available */
@@ -68,6 +69,7 @@ struct block *Final = NULL;
 struct block *findFreeBlock(struct block **last, size_t size)
 {
    struct block *curr = FreeList;
+   num_blocks = 0;
 
 #if defined FIT && FIT == 0
    /* First fit */
@@ -75,38 +77,29 @@ struct block *findFreeBlock(struct block **last, size_t size)
    {
       *last = curr;
       curr = curr->next;
+      num_blocks++;
    }
 #endif
 
 #if defined BEST && BEST == 0
    printf("TODO: Implement best fit here\n");
    struct block *best = NULL;
-   size_t min = 4096;
 
    while (curr)
    {
-      if(curr->free && (curr->size >= size) && (best == NULL || curr->size < best->size))
+      if (curr->free && (curr->size >= size) && (best == NULL || curr->size < best->size))
       {
          best = curr;
-         if(best->size == size)
+         if (best->size == size)
          {
-           break;
+            break;
          }
       }
-    curr = curr->next;
-   }
-   
-    /*if(abs(curr->size - size) < min)
-      {
-         min = curr->size;
-         best = curr;
-      }
-      *last = curr;
       curr = curr->next;
    }
 
    curr = best;
-*/
+
 #endif
 
 #if defined WORST && WORST == 0
@@ -116,7 +109,7 @@ struct block *findFreeBlock(struct block **last, size_t size)
 
    while (curr)
    {
-      if (abs(curr->size - size) > max)
+      if (curr->free && curr->size > size && abs(curr->size - size) > max)
       {
          max = curr->size;
          worst = curr;
@@ -132,6 +125,10 @@ struct block *findFreeBlock(struct block **last, size_t size)
 #if defined NEXT && NEXT == 0
    printf("TODO: Implement next fit here\n");
 
+   if (Final == NULL)
+   {
+      Final = curr;
+   }
    curr = Final;
    while (curr && !(curr->free && curr->size >= size))
    {
@@ -187,6 +184,11 @@ struct block *growHeap(struct block *last, size_t size)
    curr->size = size;
    curr->next = NULL;
    curr->free = false;
+   num_grows++;
+   if (size > max_heap)
+   {
+      max_heap = size;
+   }
    return curr;
 }
 
@@ -225,6 +227,19 @@ void *malloc(size_t size)
    struct block *next = findFreeBlock(&last, size);
 
    /* TODO: Split free block if possible */
+   if (next && size < next->size)
+   {
+      struct block temp;
+      temp.size = next->size - size;
+      temp.free = true;
+      if (next->next)
+      {
+         temp.next = next->next;
+      }
+      next->next = &temp;
+      next->size = size;
+      num_splits++;
+   }
 
    /* Could not find free block, so grow heap */
    if (next == NULL)
@@ -238,9 +253,16 @@ void *malloc(size_t size)
       return NULL;
    }
 
+   if (next->dirty)
+   {
+      num_reuses++;
+   }
+
    /* Mark block as in use */
    next->free = false;
+   next->dirty = true;
    num_mallocs++;
+   num_requested += size;
 
    /* Return data address associated with block */
    return BLOCK_DATA(next);
@@ -271,40 +293,39 @@ void free(void *ptr)
    num_frees++;
 
    /* TODO: Coalesce free blocks if needed */
-   if(curr->next)//if curr->next does not point to nothing
+   if (curr->next) //if curr->next does not point to nothing
    {
-     struct block* rightBlock = curr->next;
-     if(rightBlock->free == true)
-     {
-       curr->size += rightBlock->size;//Add the size of the rightBlock to the current block
-       num_coalesces++; //Increase the number of times we've coalesced now
-       if(!rightBlock->next)//if rightBlock->next points to nothing
-       {
-         curr->next = NULL;//Remove the next block.
-       }
-       else
-         curr->next = rightBlock->next;
-     }
+      struct block *rightBlock = curr->next;
+      if (rightBlock->free == true)
+      {
+         curr->size += rightBlock->size; //Add the size of the rightBlock to the current block
+         num_coalesces++;                //Increase the number of times we've coalesced now
+         if (!rightBlock->next)          //if rightBlock->next points to nothing
+         {
+            curr->next = NULL; //Remove the next block.
+         }
+         else
+            curr->next = rightBlock->next;
+      }
    }
-   while(tempBlock)//while tempBlock is not empty, we are not at the end of the list / the list is populated.
+   while (tempBlock) //while tempBlock is not empty, we are not at the end of the list / the list is populated.
    {
-        if(tempBlock->next == curr && tempBlock->free)//If the next one is the current node and the temporary left block from curr is free.
-        {
-          num_coalesces++; //Increase the number of times we've coalesced now
-          struct block* previous = tempBlock;
-          previous->size += curr->size;
-          if(curr->next == NULL)
-          {
-             previous->next == NULL;
-          }
-          else
-          {
-             previous->next = curr->next;
-          }
-        }
-       tempBlock = tempBlock->next;
-   } 
+      if (tempBlock->next == curr && tempBlock->free) //If the next one is the current node and the temporary left block from curr is free.
+      {
+         num_coalesces++; //Increase the number of times we've coalesced now
+         struct block *previous = tempBlock;
+         previous->size += curr->size;
+         if (curr->next == NULL)
+         {
+            previous->next == NULL;
+         }
+         else
+         {
+            previous->next = curr->next;
+         }
+      }
+      tempBlock = tempBlock->next;
+   }
 }
 
 /* vim: set expandtab sts=3 sw=3 ts=6 ft=cpp: --------------------------------*/
-
